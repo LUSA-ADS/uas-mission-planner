@@ -725,8 +725,6 @@
             <input type="number" step="any" data-bind="wp:${it.id}:alt" value="${altOn ? it.alt : ''}" ${altOn ? '' : 'disabled'} aria-label="Altitude">
             <span class="dist">${st.legDist[it.id] !== undefined ? fmtDist(st.legDist[it.id]) : ''}</span>
             <span class="row-actions">
-              <button data-act="wp-up:${it.id}" title="Move up">↑</button>
-              <button data-act="wp-down:${it.id}" title="Move down">↓</button>
               <button data-act="wp-del:${it.id}" title="Delete">✕</button>
             </span></div>`;
         }).join('') : '<div class="empty">No items yet.</div>'}
@@ -932,13 +930,6 @@
     scheduleRender();
   }
 
-  function moveItem(arr, id, dir) {
-    const i = arr.findIndex((x) => x.id === id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= arr.length) return;
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-
   function handleAction(a) {
     const [name, x, y] = a.split(':');
     const id = Number(x);
@@ -969,8 +960,6 @@
         state.mission.push(it);
         ui.sel = { kind: 'wp', id: it.id };
       }); break;
-      case 'wp-up': mutate(() => moveItem(state.mission, id, -1)); break;
-      case 'wp-down': mutate(() => moveItem(state.mission, id, 1)); break;
       case 'wp-del': mutate(() => { state.mission = state.mission.filter((w) => w.id !== id); if (isSel('wp', id)) ui.sel = null; }); break;
       case 'reverse': mutate(() => {
         // keep a leading takeoff and trailing RTL/LAND in place

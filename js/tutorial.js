@@ -61,7 +61,7 @@
       title: 'Edit a mission item',
       target: '#mission-list',
       mode: 'mission',
-      text: 'Click a row to select it and edit its command, altitude and parameters in the panel below. Use the arrows to reorder items and ✕ to delete one. The <b>Leg</b> column shows the distance from the previous item.',
+      text: 'Click a row to select it and edit its command, altitude and parameters in the panel below. Use ✕ to delete one. The <b>Leg</b> column shows the distance from the previous item.',
     },
     {
       title: 'Finish with RTL or Land',
