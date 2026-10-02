@@ -184,3 +184,33 @@ dialog::backdrop { background: rgba(10,15,25,.45); }
 }
 .toast.show { opacity: 1; }
 .toast.err { background: var(--err); }
+
+/* ---------- tutorial ---------- */
+.tour-dim { position: fixed; inset: 0; z-index: 3000; background: rgba(10,15,25,.45); }
+.tour-ring {
+  position: fixed; z-index: 3001; pointer-events: none; border-radius: 8px;
+  box-shadow: 0 0 0 3px #facc15, 0 0 0 9999px rgba(10,15,25,.35);
+  transition: left .15s, top .15s, width .15s, height .15s;
+}
+.tour-dim[hidden], .tour-ring[hidden], .tour-card[hidden], .tour-welcome[hidden] { display: none; }
+.tour-card {
+  position: fixed; z-index: 3002; width: min(340px, calc(100vw - 24px));
+  background: #fff; color: var(--ink); border-radius: 10px; padding: 12px 14px 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.4);
+}
+.tour-head { display: flex; align-items: center; justify-content: space-between; }
+.tour-step { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.tour-x { border: 0; background: transparent; cursor: pointer; font-size: 15px; color: var(--muted); padding: 2px 6px; border-radius: 4px; }
+.tour-x:hover { background: #eceff3; color: var(--ink); }
+.tour-card h3 { margin: 4px 0 6px; font-size: 16px; }
+.tour-card p { margin: 0 0 8px; line-height: 1.45; }
+.tour-done { color: #067647; font-weight: 600; }
+.tour-btns { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.tour-btns .grow { flex: 1; }
+.tour-btns .ghost { border-color: transparent; color: var(--muted); background: transparent; }
+.tour-btns .ghost:hover { background: #f3f5f8; color: var(--ink); }
+.tour-welcome {
+  position: fixed; right: 16px; bottom: 16px; z-index: 2500; max-width: 320px;
+  background: #fff; border-radius: 10px; padding: 12px 14px; box-shadow: 0 10px 40px rgba(0,0,0,.35);
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; line-height: 1.4;
+}

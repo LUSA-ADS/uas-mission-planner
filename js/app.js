@@ -1,5 +1,5 @@
 /*
- * app.js — UI for the UAS Mission Planner (mission, geofence, rally points).
+ * app.js — UI for the UAS Flight Planning (mission, geofence, rally points).
  * Depends on Leaflet (L) and formats.js (MPFormats).
  */
 (function () {
@@ -272,10 +272,8 @@
     });
     f.circles.forEach((c, i) => { if (!(c.radius > 0)) out.push(['error', `Circle ${i + 1} needs a radius above 0.`]); });
     if (!inclusionPolys().length && !f.circles.some((c) => c.type === 'inclusion')) out.push(['info', 'There is no inclusion zone, only exclusion zones.']);
-    if (!f.returnPoint) out.push(['info', 'No return point set. It is used by plane fence breach recovery. Copters ignore it.']);
-    else if (fenceViolation(f.returnPoint)) out.push(['error', 'The return point is ' + fenceViolation(f.returnPoint) + '.']);
+    if (f.returnPoint && fenceViolation(f.returnPoint)) out.push(['error', 'The return point is ' + fenceViolation(f.returnPoint) + '.']);
     if (state.home && fenceViolation(state.home)) out.push(['error', 'Home is ' + fenceViolation(state.home) + '.']);
-    out.push(['info', 'Set the fence altitude limit, action and enable switch with the FENCE_* parameters in Mission Planner (they are not part of the fence file).']);
     if (!out.some((c) => c[0] === 'error' || c[0] === 'warn')) out.unshift(['ok', 'Fence geometry looks valid.']);
     return out;
   }
@@ -1192,6 +1190,6 @@
   render();
   if (state.mission.length || state.fence.polygons.length || state.rally.length || state.home) zoomToPlan();
 
-  // expose for debugging / tests
-  window.__planner = { get state() { return state; }, ui, F, importText, exportFiles, setMode, setTool };
+  // expose for debugging / tests and the tutorial
+  window.__planner = { get state() { return state; }, ui, map, F, importText, exportFiles, setMode, setTool };
 })();

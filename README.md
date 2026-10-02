@@ -1,4 +1,4 @@
-# UAS Mission Planner (training edition)
+# UAS Flight Planning (training edition)
 
 A browser-based planner for UAS operator training. Students plan a **mission**, a **geofence** and **rally points** on a map and download files that load directly into **Mission Planner**. No installation is needed, and everything runs in the browser.
 
