@@ -1190,6 +1190,16 @@
   render();
   if (state.mission.length || state.fence.polygons.length || state.rally.length || state.home) zoomToPlan();
 
+  // ---------------------------------------------------------- info popover
+  const infoBtn = $('#btn-info'), infoPop = $('#info-pop');
+  function setInfo(open) {
+    infoPop.hidden = !open;
+    infoBtn.setAttribute('aria-expanded', open);
+  }
+  infoBtn.addEventListener('click', (e) => { e.stopPropagation(); setInfo(infoPop.hidden); });
+  document.addEventListener('click', (e) => { if (!infoPop.hidden && !infoPop.contains(e.target)) setInfo(false); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setInfo(false); });
+
   // expose for debugging / tests and the tutorial
   window.__planner = { get state() { return state; }, ui, map, F, importText, exportFiles, setMode, setTool };
 })();
