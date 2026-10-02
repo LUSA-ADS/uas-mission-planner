@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UAS Mission Planner</title>
+  <meta name="description" content="Web-based mission, geofence and rally point planner for UAS operator training. Exports Mission Planner compatible files.">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2 9 9H3l5 4-2 7 6-4 6 4-2-7 5-4h-6z" opacity=".9"/></svg>
+      <span>UAS Mission Planner</span>
+      <small>training edition</small>
+    </div>
+    <nav class="modes" role="tablist" aria-label="Plan type">
+      <button role="tab" data-mode="mission" class="mode active">Mission</button>
+      <button role="tab" data-mode="fence" class="mode">Geofence</button>
+      <button role="tab" data-mode="rally" class="mode">Rally points</button>
+    </nav>
+    <div class="actions">
+      <button id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
+      <label class="btn" title="Load .waypoints, QGroundControl .plan or a saved project">
+        Import<input type="file" id="file-import" accept=".waypoints,.txt,.json,.plan" multiple hidden>
+      </label>
+      <button id="btn-save-project" title="Save everything as a project file you can re-open here later">Save project</button>
+      <button id="btn-export" class="primary">Export for Mission Planner</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="map-wrap">
+      <div id="map" aria-label="Map"></div>
+      <div id="map-tools" class="map-tools"></div>
+      <div id="hint" class="hint" hidden></div>
+      <div id="cursor" class="cursor-readout"></div>
+    </section>
+    <aside id="sidebar" aria-label="Plan editor"></aside>
+  </main>
+
+  <dialog id="export-dialog">
+    <form method="dialog">
+      <header class="dlg-head">
+        <h2>Export for Mission Planner</h2>
+        <button value="close" class="icon" aria-label="Close">✕</button>
+      </header>
+      <div id="export-body"></div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="js/formats.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
