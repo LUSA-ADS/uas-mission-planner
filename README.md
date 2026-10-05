@@ -5,6 +5,7 @@ A browser-based planner for UAS operator training. Students plan a **mission**, 
 ## Features
 
 - **Mission:** add waypoints by clicking the map, then drag to move, reorder, insert after the selected item, and delete. You can edit command, altitude, altitude frame and parameters per item. Supported commands are Takeoff, Waypoint, Spline waypoint, Loiter (time/turns/unlimited/to altitude), Land, RTL, Delay, Change speed, Do jump, Set servo, Camera trigger distance, ROI and Land start. The planner shows leg distance and bearing, total distance and estimated flight time.
+- **Survey (grid):** draw a polygon, choose a camera (or enter sensor size, focal length and image size), set altitude, front/side overlap, line angle and overshoot. The planner shows ground resolution, image footprint, line spacing, trigger distance, flight time and photo count, then generates a serpentine waypoint grid with camera trigger commands, like Mission Planner's Survey (Grid). Regenerating replaces the previous survey waypoints.
 - **Geofence:** inclusion and exclusion polygons, inclusion and exclusion circles, and a return point. Vertices can be dragged, added at midpoints, or removed with a right-click.
 - **Rally points:** add, drag, set altitude.
 - **Checks:** altitude above the limit (default 120 m), waypoints or legs outside the fence or inside exclusion zones, self-intersecting polygons, invalid DO_JUMP targets, missing takeoff or RTL/land, and home outside the fence.

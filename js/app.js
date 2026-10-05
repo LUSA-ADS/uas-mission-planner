@@ -7,6 +7,7 @@
 
   const F = window.MPFormats;
   const G = F.geo;
+  const SV = window.MPSurvey;
 
   // ------------------------------------------------------------ settings
   // Starting map view when there is no saved plan. Change to your training area.
@@ -18,6 +19,19 @@
   let uid = 1;
   const nid = () => uid++;
 
+  function defaultSurvey() {
+    const c = SV.cameraById('sony-a6000-16');
+    return {
+      area: [],                       // [{lat, lon}] survey polygon
+      camera: c.id,
+      cam: { sw: c.sw, sh: c.sh, focal: c.focal, iw: c.iw, ih: c.ih },
+      alt: 80, front: 75, side: 65,   // altitude (m, relative to home), overlaps (%)
+      angle: 0,                       // compass bearing of the flight lines
+      portrait: 0, overshoot: 0, trigger: true, reverse: false,
+      sig: null,                      // settings the current survey waypoints were generated from
+    };
+  }
+
   function blankState() {
     return {
       planName: 'training-mission',
@@ -26,6 +40,7 @@
       mission: [], // {id, cmd, frame, p:[4], lat, lon, alt}
       fence: { returnPoint: null, polygons: [], circles: [] },
       rally: [], // {id, lat, lon, alt}
+      survey: defaultSurvey(),
     };
   }
 
@@ -36,6 +51,7 @@
     sel: null,       // {kind: 'wp'|'poly'|'circle'|'rally', id}
     drawing: null,   // id of polygon being drawn
     showLegs: true,
+    surveyOpen: false, // Survey card expanded
   };
   const history = [];
 
@@ -91,6 +107,10 @@
     s.fence = Object.assign({ returnPoint: null, polygons: [], circles: [] }, (obj && obj.fence) || {});
     s.mission = Array.isArray(s.mission) ? s.mission : [];
     s.rally = Array.isArray(s.rally) ? s.rally : [];
+    const dsv = defaultSurvey();
+    s.survey = Object.assign(dsv, (obj && obj.survey) || {});
+    s.survey.cam = Object.assign(defaultSurvey().cam, (obj && obj.survey && obj.survey.cam) || {});
+    s.survey.area = Array.isArray(s.survey.area) ? s.survey.area : [];
     return s;
   }
 
@@ -227,6 +247,7 @@
     if (!state.home) out.push(['warn', 'No home position set. The first waypoint will be used as home in the exported file.']);
     const firstNav = m.find((it) => F.cmdInfo(it.cmd).nav);
     if (firstNav && firstNav.cmd !== 22) out.push(['info', 'The first navigation item is not a TAKEOFF. Copters normally need one to start an AUTO mission from the ground.']);
+    if (surveyPending()) out.push(['info', 'The survey settings or area changed since its waypoints were generated. Click "Regenerate waypoints" in the Survey card.']);
     const last = m[m.length - 1];
     if (![20, 21, 17].includes(last.cmd)) out.push(['info', 'The mission does not end with RTL, LAND or LOITER. Plan how the flight ends.']);
     m.forEach((it, i) => {
@@ -313,6 +334,9 @@
   const layers = {
     fenceShapes: L.layerGroup().addTo(map),
     fenceHandles: L.layerGroup().addTo(map),
+    surveyShape: L.layerGroup().addTo(map),
+    surveyPreview: L.layerGroup().addTo(map),
+    surveyHandles: L.layerGroup().addTo(map),
     missionPath: L.layerGroup().addTo(map),
     missionMarkers: L.layerGroup().addTo(map),
     rally: L.layerGroup().addTo(map),
@@ -343,6 +367,7 @@
       pts.push([b.getSouth(), b.getWest()], [b.getNorth(), b.getEast()]);
     });
     state.rally.forEach((r) => pts.push([r.lat, r.lon]));
+    state.survey.area.forEach((v) => pts.push([v.lat, v.lon]));
     if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 18 });
   }
 
@@ -355,6 +380,12 @@
     switch (ui.tool) {
       case 'wp':
         mutate(() => insertMissionItem(newWaypoint(lat, lon)));
+        break;
+      case 'survey':
+        mutate(() => {
+          if (!ui.surveyDrawing) { state.survey.area = []; ui.surveyDrawing = true; }
+          state.survey.area.push({ lat, lon });
+        });
         break;
       case 'home':
         mutate(() => { state.home = { lat, lon, alt: state.home ? state.home.alt : 0 }; });
@@ -421,6 +452,9 @@
     else if (item.cmd !== 16 && item.cmd !== 82) cls += ' special';
     if (selected) cls += ' sel';
     if (!active) cls += ' dim';
+    if (item.survey && !selected) { // keep dense survey grids readable: small dot, number on selection
+      return L.divIcon({ className: '', html: `<div class="${cls} dot" style="width:12px;height:12px"></div>`, iconSize: [12, 12], iconAnchor: [6, 6] });
+    }
     return L.divIcon({ className: '', html: `<div class="${cls}" style="width:24px;height:24px">${n}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] });
   }
   const homeIcon = (active) => L.divIcon({ className: '', html: `<div class="home-icon${active ? '' : ' dim'}" style="width:24px;height:24px">H</div>`, iconSize: [24, 24], iconAnchor: [12, 12] });
@@ -446,6 +480,8 @@
       if (ui.showLegs && active) {
         for (let i = 1; i < pts.length; i++) {
           const a = pts[i - 1], b = pts[i];
+          const sa = a.id && findWp(a.id), sb = b.id && findWp(b.id);
+          if (sa && sa.survey && sb && sb.survey) continue; // dense survey grid: skip leg labels
           const mid = [(a.lat + b.lat) / 2, (a.lon + b.lon) / 2];
           L.tooltip({ permanent: true, direction: 'center', className: 'leg-label', interactive: false })
             .setLatLng(mid).setContent(fmtDist(legDist[b.id]) + ' · ' + Math.round(G.bearing(a, b)) + '°').addTo(layers.missionPath);
@@ -576,6 +612,7 @@
     mission: [
       ['wp', 'Add waypoints', 'Click the map to add waypoints. They are inserted after the selected item.', '#1f6feb'],
       ['home', 'Set home', 'Click the map where the vehicle will take off (home).', '#c2410c'],
+      ['survey', 'Survey area', 'Click the corners of the area to survey. Click the yellow first corner, press Enter or "Finish" to close.', '#06b6d4'],
     ],
     fence: [
       ['poly-inclusion', 'Inclusion polygon', 'Click to add vertices. Click the yellow first vertex, press Enter or "Finish" to close.', '#15803d'],
@@ -589,12 +626,27 @@
     ],
   };
 
+  function endSurveyDrawing() {
+    if (!ui.surveyDrawing) return;
+    ui.surveyDrawing = false;
+    if (state.survey.area.length < 3) {
+      state.survey.area = [];
+      toast('A survey area needs at least 3 corners — discarded');
+      saveLocal();
+    }
+  }
+
   function setTool(tool) {
+    if (ui.tool === 'survey' && tool !== 'survey') endSurveyDrawing();
     if (ui.drawing && tool !== ui.tool) {
       const t = ui.tool; ui.tool = null;
       if (t) { finishPolygonQuiet(); }
     }
     ui.tool = tool;
+    if (tool === 'survey' && !ui.surveyOpen) {
+      ui.surveyOpen = true;
+      requestAnimationFrame(() => requestAnimationFrame(() => { const c = $('#survey-card'); if (c) c.scrollIntoView({ block: 'nearest' }); }));
+    }
     $('.map-wrap').classList.toggle('tool-on', !!tool);
     scheduleRender();
   }
@@ -616,9 +668,11 @@
     const t = TOOLS[ui.mode].find((x) => x[0] === ui.tool);
     if (t) {
       const poly = ui.drawing && findPoly(ui.drawing);
+      const sdraw = ui.tool === 'survey' && ui.surveyDrawing;
       let extra = '';
       if (poly) extra = `<span class="muted" style="color:#cbd5e1">${poly.points.length} vertices</span><button data-hint="finish">Finish</button>`;
-      hint.innerHTML = `<span>${esc(t[2])}</span>${extra}<button class="ghost" data-hint="cancel">${poly ? 'Cancel' : 'Done'} (Esc)</button>`;
+      else if (sdraw) extra = `<span class="muted" style="color:#cbd5e1">${state.survey.area.length} corners</span><button data-hint="finish">Finish</button>`;
+      hint.innerHTML = `<span>${esc(t[2])}</span>${extra}<button class="ghost" data-hint="cancel">${poly || sdraw ? 'Cancel' : 'Done'} (Esc)</button>`;
       hint.hidden = false;
     } else hint.hidden = true;
   }
@@ -635,8 +689,11 @@
   $('#hint').addEventListener('click', (e) => {
     const b = e.target.closest('[data-hint]');
     if (!b) return;
-    if (b.dataset.hint === 'finish') finishPolygon();
-    else if (ui.drawing) {
+    if (b.dataset.hint === 'finish') { if (ui.tool === 'survey') setTool(null); else finishPolygon(); }
+    else if (ui.tool === 'survey' && ui.surveyDrawing) {
+      mutate(() => { state.survey.area = []; });
+      setTool(null);
+    } else if (ui.drawing) {
       // cancel drawing: remove polygon
       const id = ui.drawing; ui.drawing = null;
       mutate(() => { state.fence.polygons = state.fence.polygons.filter((p) => p.id !== id); ui.sel = null; });
@@ -666,6 +723,165 @@
   };
   function checksHtml(list) {
     return `<div class="card"><h3>Checks</h3><ul class="checks">${list.map(([lvl, msg]) => `<li class="${lvl}">${esc(msg)}</li>`).join('')}</ul></div>`;
+  }
+
+  // ============================================================ SURVEY (GRID)
+  const surveyIcon = (first) => L.divIcon({ className: '', html: `<div class="vtx-icon survey${first ? ' first' : ''}" style="width:12px;height:12px"></div>`, iconSize: [12, 12], iconAnchor: [6, 6] });
+
+  /** Footprint figures and the generated path for the current survey settings. */
+  function surveyCalc() {
+    const s = state.survey;
+    const fp = SV.footprint(s.cam, Number(s.alt), Number(s.front), Number(s.side), Number(s.portrait));
+    if (!fp) return { fp: null, gen: null, error: 'Check the camera values and the altitude.' };
+    if (s.area.length < 3) return { fp, gen: null, error: 'Draw the survey area first.' };
+    const gen = SV.generate(s.area, { angle: s.angle, spacing: fp.spacing, overshoot: s.overshoot, reverse: s.reverse });
+    return { fp, gen: gen.error ? null : gen, error: gen.error };
+  }
+  const surveySig = () => { const s = state.survey; return JSON.stringify([s.area, s.cam, s.alt, s.front, s.side, s.angle, s.portrait, s.overshoot, s.trigger, s.reverse]); };
+  const surveyItemCount = () => state.mission.filter((it) => it.survey).length;
+  const surveyPending = () => surveyItemCount() > 0 && state.survey.sig !== surveySig();
+
+  function generateSurvey() {
+    const c = surveyCalc();
+    if (!c.gen) return toast(c.error || 'Draw the survey area first', true);
+    const s = state.survey;
+    const trig = s.trigger && c.fp.trigger > 0;
+    mutate(() => {
+      const items = [];
+      const cmd206 = (dist) => { const t = newCommand(206); t.p[0] = dist; t.survey = true; return t; };
+      if (trig) items.push(cmd206(Math.round(c.fp.trigger * 10) / 10));
+      c.gen.points.forEach((pt) => {
+        const w = newWaypoint(pt.lat, pt.lon);
+        w.alt = Number(s.alt); w.frame = 3; w.survey = true; // relative to home
+        items.push(w);
+      });
+      if (trig) items.push(cmd206(0));
+
+      // replace a previous survey in place, otherwise insert after the selection or before a final RTL/Land
+      let at = state.mission.findIndex((it) => it.survey);
+      state.mission = state.mission.filter((it) => !it.survey);
+      if (at < 0) {
+        const si = ui.sel && ui.sel.kind === 'wp' ? state.mission.findIndex((w) => w.id === ui.sel.id) : -1;
+        const lastItem = state.mission[state.mission.length - 1];
+        at = si >= 0 ? si + 1 : lastItem && (lastItem.cmd === 20 || lastItem.cmd === 21) ? state.mission.length - 1 : state.mission.length;
+      }
+      state.mission.splice(at, 0, ...items);
+      s.sig = surveySig();
+      ui.sel = null;
+    });
+    toast(`Survey inserted: ${c.gen.points.length} waypoints on ${c.gen.lines} lines`);
+  }
+
+  function drawSurveyPreview() {
+    layers.surveyPreview.clearLayers();
+    if (ui.mode !== 'mission') return;
+    const c = surveyCalc();
+    if (!c.gen || (surveyItemCount() && !surveyPending())) return;
+    L.polyline(c.gen.points.map((p) => [p.lat, p.lon]), { color: '#22d3ee', weight: 2, dashArray: '5 4', opacity: 0.95, interactive: false }).addTo(layers.surveyPreview);
+  }
+
+  function renderSurvey() {
+    layers.surveyShape.clearLayers();
+    layers.surveyHandles.clearLayers();
+    const s = state.survey;
+    const active = ui.mode === 'mission';
+    const drawing = ui.tool === 'survey' && ui.surveyDrawing;
+    const ll = s.area.map((p) => [p.lat, p.lon]);
+    if (ll.length >= 2) {
+      (drawing ? L.polyline : L.polygon)(ll, {
+        color: '#06b6d4', weight: 2.5, opacity: active ? 1 : 0.5, fillOpacity: 0.08,
+        dashArray: drawing ? '6 5' : null, interactive: false,
+      }).addTo(layers.surveyShape);
+    }
+    drawSurveyPreview();
+    if (!active) return;
+    s.area.forEach((pt, vi) => {
+      const m = L.marker([pt.lat, pt.lon], { icon: surveyIcon(vi === 0 && drawing), draggable: true, zIndexOffset: 700, title: `Survey corner ${vi + 1} (right-click to delete)` }).addTo(layers.surveyHandles);
+      m.on('click', () => { if (drawing && vi === 0 && s.area.length >= 3) setTool(null); });
+      m.on('contextmenu', () => {
+        if (s.area.length <= 3 && !drawing) return toast('A survey area needs at least 3 corners');
+        mutate(() => s.area.splice(vi, 1));
+      });
+      makeDraggable(m, (lat, lon) => { pt.lat = lat; pt.lon = lon; }, () => {
+        layers.surveyShape.clearLayers();
+        L.polygon(s.area.map((p) => [p.lat, p.lon]), { color: '#06b6d4', weight: 2.5, fillOpacity: 0.08, interactive: false }).addTo(layers.surveyShape);
+        drawSurveyPreview();
+      });
+    });
+    // midpoint handles to add corners
+    if (!drawing && s.area.length >= 3) {
+      s.area.forEach((a, vi) => {
+        const b = s.area[(vi + 1) % s.area.length];
+        const mm = L.marker([(a.lat + b.lat) / 2, (a.lon + b.lon) / 2], { icon: midIcon, title: 'Click to add a corner here' }).addTo(layers.surveyHandles);
+        mm.on('click', () => mutate(() => s.area.splice(vi + 1, 0, { lat: r6((a.lat + b.lat) / 2), lon: r6((a.lon + b.lon) / 2) })));
+      });
+    }
+  }
+
+  function renderSurveyCard() {
+    const s = state.survey, c = surveyCalc(), fp = c.fp;
+    const have = surveyItemCount();
+    const speed = Number(state.settings.speed) || 0;
+    const area = s.area.length >= 3 ? G.polygonArea(s.area) : 0;
+    const stat = (v, l) => `<div><b>${v}</b><span class="muted">${l}</span></div>`;
+    const check = (label, bind) => `<label class="f" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" data-bind="${bind}" ${s[bind.split(':')[1]] ? 'checked' : ''} style="width:auto"> ${label}</label>`;
+    let stats = '';
+    if (fp) {
+      stats += stat(isFinite(fp.gsd) ? fp.gsd.toFixed(1) + ' cm/px' : '–', 'ground resolution (GSD)');
+      stats += stat(`${Math.round(fp.across)} × ${Math.round(fp.along)} m`, 'image footprint');
+      stats += stat(fp.spacing > 0 ? Math.round(fp.spacing * 10) / 10 + ' m' : '–', 'line spacing');
+      stats += stat(fp.trigger > 0 ? Math.round(fp.trigger * 10) / 10 + ' m' : '–', 'trigger distance');
+    }
+    if (c.gen) {
+      stats += stat(c.gen.lines, 'flight lines');
+      stats += stat(c.gen.points.length, 'waypoints');
+      stats += stat(fmtDist(c.gen.length), 'survey distance');
+      stats += stat(speed > 0 ? fmtTime(c.gen.length / speed) : '–', `time @ ${speed} m/s`);
+      if (fp.trigger > 0) stats += stat('≈ ' + Math.ceil(c.gen.length / fp.trigger), 'photos');
+    }
+    if (area) stats += stat(fmtArea(area), 'area');
+    const open = ui.surveyOpen;
+    const header = `<h3><button class="card-toggle" data-act="survey-toggle" aria-expanded="${open}" aria-controls="survey-body"><span class="chev">${open ? '▾' : '▸'}</span>Survey (grid)</button>
+        ${open ? `<button class="b" data-act="tool:survey">${ui.tool === 'survey' ? 'Stop drawing' : s.area.length ? 'Redraw area' : 'Draw area'}</button>` : ''}</h3>`;
+    if (!open) {
+      const bits = [s.area.length >= 3 ? `${s.area.length} corners` : 'No area drawn'];
+      if (have) bits.push(`${have} items in mission`);
+      return `<div class="card collapsed" id="survey-card">${header}<p class="help" style="margin:0">${bits.join(' · ')}. Click to open the grid survey tools.</p></div>`;
+    }
+    return `
+    <div class="card" id="survey-card">
+      ${header}
+      <div id="survey-body">
+      ${s.area.length >= 3 ? `<p class="help" style="margin:0 0 8px">${s.area.length} corners. Drag a corner to move it, click a midpoint handle to add one, right-click a corner to remove it.</p>`
+        : '<p class="help" style="margin:0 0 8px">Pick <b>Draw area</b> and click the corners of the area you want to cover. Choose your camera and overlaps below, then generate the waypoints.</p>'}
+      ${selectField('Camera', 'survey:camera', s.camera, SV.CAMERAS.map((k) => [k.id, k.name]))}
+      ${s.camera === 'custom' ? `<div class="grid3" style="margin-top:8px">
+        ${field('Sensor width (mm)', 'survey:cam:sw', s.cam.sw, { min: 0 })}${field('Sensor height (mm)', 'survey:cam:sh', s.cam.sh, { min: 0 })}${field('Focal length (mm)', 'survey:cam:focal', s.cam.focal, { min: 0 })}
+        ${field('Image width (px)', 'survey:cam:iw', s.cam.iw, { min: 0 })}${field('Image height (px)', 'survey:cam:ih', s.cam.ih, { min: 0 })}</div>` : ''}
+      <div class="grid2" style="margin-top:8px">
+        ${field('Altitude (m, above home)', 'survey:alt', s.alt, { min: 1 })}
+        ${selectField('Camera orientation', 'survey:portrait', Number(s.portrait), [[0, 'Landscape'], [1, 'Portrait']])}
+        ${field('Front overlap (%)', 'survey:front', s.front, { min: 0 })}
+        ${field('Side overlap (%)', 'survey:side', s.side, { min: 0 })}
+        ${field('Line angle (° from north)', 'survey:angle', s.angle)}
+        ${field('Overshoot (m)', 'survey:overshoot', s.overshoot, { min: 0 })}
+      </div>
+      <div class="btns" style="align-items:center">
+        ${s.area.length >= 3 ? '<button class="b" data-act="survey-best-angle" title="Fly along the longest side of the area">Align to longest side</button>' : ''}
+        ${check('Camera trigger commands', 'survey:trigger')}
+        ${check('Start from the other side', 'survey:reverse')}
+      </div>
+      <div class="stats" style="margin-top:10px">${stats}</div>
+      ${c.error && s.area.length >= 3 ? `<p class="help" style="color:var(--err)">${esc(c.error)}</p>` : ''}
+      ${fp && fp.trigger <= 0 ? '<p class="help" style="color:var(--warn)">Front overlap is too high for a trigger distance.</p>' : ''}
+      <div class="btns">
+        <button class="b primary" data-act="survey-gen"${c.gen ? '' : ' disabled'}>${have ? 'Regenerate waypoints' : 'Generate waypoints'}</button>
+        ${have ? '<button class="b danger" data-act="survey-remove">Remove survey waypoints</button>' : ''}
+        ${s.area.length ? '<button class="b" data-act="survey-clear-area">Clear area</button>' : ''}
+      </div>
+      <p class="help">${have ? `${have} survey items are in the mission${surveyPending() ? '. <b>Settings changed. Regenerate to update them.</b>' : '.'} ` : ''}Waypoints are relative to home. The dashed cyan line previews the path. Camera values are typical, so check them against your camera's datasheet.</p>
+      </div>
+    </div>`;
   }
 
   function renderMissionPanel() {
@@ -731,6 +947,7 @@
       </div>
       ${state.mission.length ? '<div class="btns"><button class="b" data-act="reverse">Reverse order</button><button class="b danger" data-act="clear-mission">Clear mission</button></div>' : ''}
     </div>`;
+    html += renderSurveyCard();
 
     if (sel) {
       const i = state.mission.indexOf(sel);
@@ -857,6 +1074,16 @@
     mutate(() => {
       switch (parts[0]) {
         case 'planName': state.planName = String(raw); break;
+        case 'survey': {
+          const sv = state.survey;
+          if (parts[1] === 'camera') {
+            const c = SV.cameraById(raw);
+            sv.camera = String(raw);
+            if (c && c.id !== 'custom') sv.cam = { sw: c.sw, sh: c.sh, focal: c.focal, iw: c.iw, ih: c.ih };
+          } else if (parts[1] === 'cam') { sv.cam[parts[2]] = v; sv.camera = 'custom'; }
+          else sv[parts[1]] = v;
+          break;
+        }
         case 'settings': state.settings[parts[1]] = v; break;
         case 'home': state.home[parts[1]] = v; break;
         case 'ret': state.fence.returnPoint[parts[1]] = v; break;
@@ -940,6 +1167,15 @@
         setTool(ui.tool === t ? null : t);
         break;
       }
+      case 'survey-toggle':
+        ui.surveyOpen = !ui.surveyOpen;
+        scheduleRender();
+        if (ui.surveyOpen) requestAnimationFrame(() => requestAnimationFrame(() => { const c = $('#survey-card'); if (c) c.scrollIntoView({ block: 'nearest' }); }));
+        break;
+      case 'survey-gen': generateSurvey(); break;
+      case 'survey-remove': mutate(() => { state.mission = state.mission.filter((it) => !it.survey); ui.sel = null; }); break;
+      case 'survey-clear-area': mutate(() => { state.survey.area = []; }); break;
+      case 'survey-best-angle': mutate(() => { state.survey.angle = SV.longestEdgeAngle(state.survey.area); }); break;
       case 'clear-home': mutate(() => { state.home = null; }); break;
       case 'all-alt':
         mutate(() => state.mission.forEach((it) => {
@@ -1001,6 +1237,7 @@
   // ------------------------------------------------------------- modes
   function setMode(mode) {
     if (ui.drawing) finishPolygon();
+    if (ui.tool === 'survey') endSurveyDrawing();
     ui.mode = mode;
     ui.tool = null;
     ui.sel = null;
@@ -1023,6 +1260,7 @@
       else if (ui.sel) select(null);
     }
     if (e.key === 'Enter' && ui.drawing && !typing) finishPolygon();
+    if (e.key === 'Enter' && ui.tool === 'survey' && ui.surveyDrawing && !typing) setTool(null);
     if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && ui.sel) {
       e.preventDefault();
       const k = ui.sel.kind;
@@ -1169,6 +1407,7 @@
   }
   function render() {
     renderFence();
+    renderSurvey();
     renderMissionPath();
     renderMissionMarkers();
     renderRally();
@@ -1190,5 +1429,5 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setInfo(false); });
 
   // expose for debugging / tests and the tutorial
-  window.__planner = { get state() { return state; }, ui, map, F, importText, exportFiles, setMode, setTool };
+  window.__planner = { get state() { return state; }, ui, map, F, importText, exportFiles, setMode, setTool, render: scheduleRender };
 })();

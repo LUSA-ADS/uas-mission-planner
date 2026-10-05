@@ -71,6 +71,14 @@
       check: () => hasCmd(20, 21),
     },
     {
+      title: 'Survey grid (optional)',
+      target: '#survey-card',
+      mode: 'mission',
+      enter: () => { P.ui.surveyOpen = true; P.render(); },
+      text: 'For mapping flights, use <b>Survey (grid)</b>. Open the card, click <b>Draw area</b> and outline the area on the map, pick your camera, altitude and overlaps, then click <b>Generate waypoints</b>. The planner works out the line spacing and camera trigger distance for you.',
+      check: () => P.state.survey && P.state.survey.area.length >= 3,
+    },
+    {
       title: 'Read the checks',
       target: () => { const c = $('#sidebar .checks'); return c && c.closest('.card'); },
       mode: 'mission',
@@ -174,6 +182,7 @@
     lastDone = null;
     P.setTool(null);
     if (s.mode && P.ui.mode !== s.mode) P.setMode(s.mode);
+    if (s.enter) s.enter();
     renderCard();
   }
 
