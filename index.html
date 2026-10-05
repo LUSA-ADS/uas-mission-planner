@@ -56,11 +56,22 @@
     </form>
   </dialog>
 
+  <dialog id="terrain-dialog">
+    <form method="dialog">
+      <header class="dlg-head">
+        <h2>Terrain check</h2>
+        <button value="close" class="icon" aria-label="Close">✕</button>
+      </header>
+      <div id="terrain-body"></div>
+    </form>
+  </dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="js/formats.js"></script>
   <script src="js/survey.js"></script>
+  <script src="js/terrain.js"></script>
   <script src="js/app.js"></script>
   <script src="js/tutorial.js"></script>
 </body>

@@ -238,3 +238,36 @@ dialog::backdrop { background: rgba(10,15,25,.45); }
 .card-toggle:hover { color: var(--ink); }
 .card-toggle .chev { width: 12px; display: inline-block; }
 .card.collapsed h3 { margin-bottom: 4px; }
+
+/* ---------- terrain check ---------- */
+#terrain-body { padding: 14px 18px 18px; }
+.err-box { display: block; background: var(--err-bg); color: var(--err); padding: 8px 10px; border-radius: 6px; }
+.tp-banner { border-radius: 8px; padding: 8px 12px; margin: 10px 0; font-size: 13px; line-height: 1.45; }
+.tp-banner.ok { background: #ecfdf3; color: #067647; }
+.tp-banner.bad { background: var(--err-bg); color: var(--err); }
+.tp-banner ul { margin: 4px 0 4px; padding-left: 18px; }
+.tp-chart { width: 100%; height: auto; display: block; background: #f8fafc; border: 1px solid var(--line); border-radius: 8px; }
+.tp-ground { fill: #cdbf9f; stroke: #8b7b5e; stroke-width: 1; }
+.tp-flight { fill: none; stroke: var(--wp); stroke-width: 2; }
+.tp-min { fill: none; stroke: #dc2626; stroke-width: 1; stroke-dasharray: 4 3; opacity: .7; }
+.tp-bad { fill: #dc2626; stroke: #dc2626; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+path.tp-high { fill: none; }
+.tp-high { stroke: #d97706; stroke-width: 4; fill: #d97706; }
+path.tp-bad { fill: none; }
+.tp-wp { fill: #fff; stroke: var(--wp); stroke-width: 1.5; }
+.tp-wp.low, .tp-wp.under { stroke: #dc2626; fill: #fecaca; }
+.tp-wp.high { stroke: #d97706; fill: #fde68a; }
+.tp-n { font-size: 9px; fill: #334155; }
+.tp-ax { font-size: 10px; fill: var(--muted); }
+.tp-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: var(--muted); margin: 6px 0 0; }
+.tp-legend .lg { display: inline-block; width: 14px; height: 0; border-top: 2px solid; margin-right: 5px; vertical-align: middle; }
+.lg-flight { border-color: var(--wp); }
+.lg-ground { border-color: #8b7b5e; border-top-width: 6px !important; }
+.lg-min { border-color: #dc2626; border-top-style: dashed; }
+.lg-bad { border-color: #dc2626; border-top-width: 4px !important; }
+.tp-table { max-height: 260px; overflow: auto; margin-top: 10px; border: 1px solid var(--line); border-radius: 8px; }
+.tp-table table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.tp-table th { position: sticky; top: 0; background: #f3f5f8; text-align: left; padding: 6px 8px; font-weight: 600; }
+.tp-table td { padding: 4px 8px; border-top: 1px solid var(--line); }
+.tp-table tr.low td, .tp-table tr.under td { background: var(--err-bg); color: var(--err); }
+.tp-table tr.high td { background: var(--warn-bg); color: var(--warn); }

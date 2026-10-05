@@ -8,6 +8,7 @@
   const F = window.MPFormats;
   const G = F.geo;
   const SV = window.MPSurvey;
+  const TR = window.MPTerrain;
 
   // ------------------------------------------------------------ settings
   // Starting map view when there is no saved plan. Change to your training area.
@@ -77,6 +78,7 @@
   }
 
   function changed() {
+    if (layers && layers.terrain) layers.terrain.clearLayers(); // highlights belong to the plan they were checked for
     saveLocal();
     scheduleRender();
   }
@@ -320,11 +322,23 @@
     'Satellite (Esri)': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 20, maxNativeZoom: 19, attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics',
     }),
+    'Street map (Esri)': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 20, maxNativeZoom: 19, attribution: 'Tiles &copy; Esri, HERE, Garmin, OpenStreetMap contributors',
+    }),
+    'Topographic (Esri)': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 20, maxNativeZoom: 19, attribution: 'Tiles &copy; Esri, HERE, Garmin, USGS, NGA, OpenStreetMap contributors',
+    }),
     'Street map (OSM)': L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 20, maxNativeZoom: 19, attribution: '&copy; OpenStreetMap contributors',
     }),
     'Topographic (OpenTopoMap)': L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
       maxZoom: 20, maxNativeZoom: 17, attribution: '&copy; OpenStreetMap contributors, SRTM | &copy; OpenTopoMap (CC-BY-SA)',
+    }),
+    'Light street map (CARTO Voyager)': L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      maxZoom: 20, maxNativeZoom: 20, subdomains: 'abcd', attribution: '&copy; OpenStreetMap contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    }),
+    'Cycling & terrain (CyclOSM)': L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', {
+      maxZoom: 20, maxNativeZoom: 20, subdomains: 'abc', attribution: '<a href="https://github.com/cyclosm/cyclosm-cartocss-style/releases">CyclOSM</a> | Map data: &copy; OpenStreetMap contributors',
     }),
   };
   baseLayers['Satellite (Esri)'].addTo(map);
@@ -340,6 +354,7 @@
     missionPath: L.layerGroup().addTo(map),
     missionMarkers: L.layerGroup().addTo(map),
     rally: L.layerGroup().addTo(map),
+    terrain: L.layerGroup().addTo(map),
   };
 
   const LOCATE_BUTTON = L.Control.extend({
@@ -726,6 +741,149 @@
     return `<div class="card"><h3>Checks</h3><ul class="checks">${list.map(([lvl, msg]) => `<li class="${lvl}">${esc(msg)}</li>`).join('')}</ul></div>`;
   }
 
+  // ============================================================ TERRAIN CHECK
+  let terrainCtx = null;
+  const FRAME_SHORT = { 0: 'AMSL', 10: 'terrain' };
+  const frameShort = (f) => FRAME_SHORT[Number(f)] || 'rel. home';
+  const fmtM = (v) => (isFinite(v) ? Math.round(v) + ' m' : '–');
+
+  function terrainRoute() {
+    const route = [];
+    state.mission.forEach((it, i) => {
+      if (!F.cmdInfo(it.cmd).nav || !F.itemHasPosition(it)) return;
+      route.push({ lat: Number(it.lat), lon: Number(it.lon), alt: Number(it.alt) || 0, frame: Number(it.frame), cmd: it.cmd, id: it.id, n: i + 1 });
+    });
+    return route;
+  }
+
+  async function terrainCheck() {
+    const route = terrainRoute();
+    if (!route.length) return toast('Add some waypoints first', true);
+    const dlg = $('#terrain-dialog'), body = $('#terrain-body');
+    body.innerHTML = '<p class="muted">Loading elevation data…</p>';
+    if (!dlg.open) dlg.showModal();
+    const home = state.home || route[0];
+    try {
+      const prof = await TR.profile(route, home, 15);
+      const prev = terrainCtx || {};
+      terrainCtx = {
+        prof, homeFromWp: !state.home, demHome: prof.homeGround,
+        homeGround: Math.round(prof.homeGround * 10) / 10,
+        minClear: prev.minClear !== undefined ? prev.minClear : 20,
+        maxAgl: Number(state.settings.maxAlt) || 0,
+      };
+      renderTerrain();
+    } catch (e) {
+      body.innerHTML = `<p class="checks"><span class="err-box">Could not load elevation data. Check your internet connection and try again.</span></p><p class="help">${esc(e.message || e)}</p>`;
+    }
+  }
+
+  function drawTerrainHighlights(r) {
+    layers.terrain.clearLayers();
+    r.runs.forEach((run) => {
+      const pts = r.samples.slice(run.from, run.to + 1).map((s) => [s.lat, s.lon]);
+      const color = run.kind === 'high' ? '#d97706' : '#dc2626';
+      const tip = terrainRunText(run);
+      (pts.length > 1 ? L.polyline(pts, { color, weight: 7, opacity: 0.8 }) : L.circleMarker(pts[0], { radius: 7, color, fillColor: color, fillOpacity: 0.8 }))
+        .bindTooltip(tip).addTo(layers.terrain);
+    });
+  }
+
+  function terrainRunText(run) {
+    const t = terrainCtx, route = t.prof.route;
+    const a = route[run.seg0].n, bIdx = Math.min(run.seg1 + 1, route.length - 1), b = route[bIdx].n;
+    const where = a === b ? `at item ${a}` : `between items ${a} and ${b}`;
+    if (run.kind === 'under') return `Below the terrain ${where} (${Math.round(run.worst)} m)`;
+    if (run.kind === 'low') return `Clearance only ${Math.round(run.worst)} m ${where} (minimum ${t.minClear} m)`;
+    return `${Math.round(run.worst)} m above ground ${where} (limit ${t.maxAgl} m)`;
+  }
+
+  function terrainChart(r) {
+    const W = 720, H = 220, ml = 50, mr = 12, mt = 12, mb = 26;
+    const S = r.samples, total = r.total || 1;
+    const t = terrainCtx;
+    const all = S.map((s) => s.ground).concat(S.map((s) => s.flight), S.map((s) => s.ground + t.minClear));
+    let lo = Math.min(...all), hi = Math.max(...all);
+    const pad = Math.max(5, (hi - lo) * 0.08);
+    lo -= pad; hi += pad;
+    const X = (d) => ml + (d / total) * (W - ml - mr);
+    const Y = (e) => mt + (1 - (e - lo) / (hi - lo)) * (H - mt - mb);
+    const line = (key, off = 0) => S.map((s, i) => `${i ? 'L' : 'M'}${X(s.d).toFixed(1)},${Y(s[key] + off).toFixed(1)}`).join('');
+    const ground = `${line('ground')}L${X(S[S.length - 1].d).toFixed(1)},${H - mb}L${X(S[0].d).toFixed(1)},${H - mb}Z`;
+    const minLine = S.map((s, i) => `${i ? 'L' : 'M'}${X(s.d).toFixed(1)},${Y(s.ground + t.minClear).toFixed(1)}`).join('');
+    const bad = r.runs.map((run) => {
+      const pts = S.slice(run.from, run.to + 1);
+      const cls = run.kind === 'high' ? 'tp-high' : 'tp-bad';
+      return pts.length > 1
+        ? `<path class="${cls}" d="${pts.map((s, i) => `${i ? 'L' : 'M'}${X(s.d).toFixed(1)},${Y(s.flight).toFixed(1)}`).join('')}"/>`
+        : `<circle class="${cls}" cx="${X(pts[0].d).toFixed(1)}" cy="${Y(pts[0].flight).toFixed(1)}" r="4"/>`;
+    }).join('');
+    const showN = r.wps.length <= 25;
+    const dots = r.wps.map((w) => `<circle class="tp-wp ${w.status}" cx="${X(w.d).toFixed(1)}" cy="${Y(w.flight).toFixed(1)}" r="3.5"/>`
+      + (showN ? `<text class="tp-n" x="${X(w.d).toFixed(1)}" y="${(Y(w.flight) - 7).toFixed(1)}" text-anchor="middle">${w.n}</text>` : '')).join('');
+    return `<svg class="tp-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Terrain profile along the flight path">
+      <path class="tp-ground" d="${ground}"/>
+      <path class="tp-min" d="${minLine}"/>
+      <path class="tp-flight" d="${line('flight')}"/>
+      ${bad}${dots}
+      <text class="tp-ax" x="${ml - 6}" y="${Y(hi) + 8}" text-anchor="end">${Math.round(hi)} m</text>
+      <text class="tp-ax" x="${ml - 6}" y="${Y(lo)}" text-anchor="end">${Math.round(lo)} m</text>
+      <text class="tp-ax" x="${ml}" y="${H - 8}">0</text>
+      <text class="tp-ax" x="${W - mr}" y="${H - 8}" text-anchor="end">${fmtDist(total)} along path</text>
+    </svg>
+    <div class="tp-legend"><span><i class="lg lg-flight"></i>Flight path</span><span><i class="lg lg-ground"></i>Terrain</span><span><i class="lg lg-min"></i>Minimum clearance</span><span><i class="lg lg-bad"></i>Problem</span></div>`;
+  }
+
+  function renderTerrain() {
+    const t = terrainCtx;
+    if (!t) return;
+    const r = TR.evaluate(t.prof, { homeGround: t.homeGround, minClear: t.minClear, maxAgl: t.maxAgl });
+    t.result = r;
+    drawTerrainHighlights(r);
+    const STATUS = { ok: 'OK', low: 'Low clearance', under: 'Below terrain', high: 'Above limit', land: 'Landing' };
+    const bad = r.wps.filter((w) => w.status !== 'ok' && w.status !== 'land').length;
+    let banner;
+    if (!r.runs.length && !bad) {
+      const m = r.min;
+      banner = `<div class="tp-banner ok">✓ No terrain problems found.${m ? ` Lowest clearance ${Math.round(m.agl)} m, ${fmtDist(m.d)} along the path.` : ''}</div>`;
+    } else {
+      banner = `<div class="tp-banner bad"><b>${bad} waypoint${bad === 1 ? '' : 's'} and ${r.runs.length} stretch${r.runs.length === 1 ? '' : 'es'} with problems.</b><ul>${
+        r.runs.slice(0, 8).map((run) => `<li>${esc(terrainRunText(run))}</li>`).join('')}${r.runs.length > 8 ? `<li>…and ${r.runs.length - 8} more</li>` : ''}</ul>
+        <span class="muted">The problem stretches are also marked on the map.</span></div>`;
+    }
+    const num = (label, key, val, min) => `<label class="f">${label}<input type="number" step="any" data-t="${key}" value="${esc(val)}"${min !== undefined ? ` min="${min}"` : ''}></label>`;
+    const homeNote = t.homeFromWp ? 'No home is set, so the first waypoint was used.' : 'Terrain data at home';
+    const rows = r.wps.map((w) => `<tr class="${w.status}"><td>${w.n}</td><td>${Math.round(w.alt)} m <span class="muted">${frameShort(w.frame)}</span></td><td>${fmtM(w.flight)}</td><td>${fmtM(w.ground)}</td><td>${w.status === 'land' ? '–' : fmtM(w.agl)}</td><td>${STATUS[w.status]}</td></tr>`).join('');
+    $('#terrain-body').innerHTML = `
+      <div class="grid3">
+        ${num('Home ground elevation (m AMSL)', 'homeGround', t.homeGround)}
+        ${num('Minimum clearance (m)', 'minClear', t.minClear, 0)}
+        ${num('Maximum height above ground (m, 0 = off)', 'maxAgl', t.maxAgl, 0)}
+      </div>
+      <p class="help">${homeNote}: ${t.demHome.toFixed(1)} m. Waypoints relative to home are placed at home elevation plus their altitude.
+        ${!t.homeFromWp && state.home && Math.round(Number(state.home.alt)) !== Math.round(t.homeGround) ? '<button type="button" class="b" data-t-act="set-home">Set home altitude to ' + Math.round(t.homeGround) + ' m</button>' : ''}</p>
+      ${banner}
+      ${terrainChart(r)}
+      <div class="tp-table"><table><thead><tr><th>Item</th><th>Set altitude</th><th>Flight alt AMSL</th><th>Ground AMSL</th><th>Clearance</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="help">Elevation comes from open global terrain tiles (SRTM, EU-DEM and others, roughly 10 to 30 m resolution). It can miss trees, buildings and masts, so use it as a guide and verify the site. The takeoff climb and the RTL return leg are not checked, and descents to a landing point are skipped.</p>`;
+  }
+
+  $('#terrain-body').addEventListener('change', (e) => {
+    const key = e.target.dataset.t;
+    if (!key || !terrainCtx) return;
+    const v = Number(e.target.value);
+    if (!isFinite(v)) return;
+    terrainCtx[key] = v;
+    renderTerrain();
+  });
+  $('#terrain-body').addEventListener('click', (e) => {
+    if (e.target.closest('[data-t-act="set-home"]') && state.home && terrainCtx) {
+      mutate(() => { state.home.alt = Math.round(terrainCtx.homeGround); });
+      drawTerrainHighlights(terrainCtx.result);
+      renderTerrain();
+    }
+  });
+
   // ============================================================ SURVEY (GRID)
   const surveyIcon = (first) => L.divIcon({ className: '', html: `<div class="vtx-icon survey${first ? ' first' : ''}" style="width:12px;height:12px"></div>`, iconSize: [12, 12], iconAnchor: [6, 6] });
 
@@ -877,7 +1035,7 @@
       ${fp && fp.trigger <= 0 ? '<p class="help" style="color:var(--warn)">Front overlap is too high for a trigger distance.</p>' : ''}
       <div class="btns">
         <button class="b primary" data-act="survey-gen"${c.gen ? '' : ' disabled'}>${have ? 'Regenerate waypoints' : 'Generate waypoints'}</button>
-        ${have ? '<button class="b danger" data-act="survey-remove">Remove survey waypoints</button>' : ''}
+        ${have ? '<button class="b" data-act="terrain-check">Check terrain</button><button class="b danger" data-act="survey-remove">Remove survey waypoints</button>' : ''}
         ${s.area.length ? '<button class="b" data-act="survey-clear-area">Clear area</button>' : ''}
       </div>
       <p class="help">${have ? `${have} survey items are in the mission${surveyPending() ? '. <b>Settings changed. Regenerate to update them.</b>' : '.'} ` : ''}Waypoints are relative to home. The dashed cyan line previews the path. Camera values are typical, so check them against your camera's datasheet.</p>
@@ -946,7 +1104,7 @@
             </span></div>`;
         }).join('') : '<div class="empty">No items yet.</div>'}
       </div>
-      ${state.mission.length ? '<div class="btns"><button class="b" data-act="reverse">Reverse order</button><button class="b danger" data-act="clear-mission">Clear mission</button></div>' : ''}
+      ${state.mission.length ? '<div class="btns"><button class="b" data-act="terrain-check" title="Compare waypoint heights with the terrain">Check terrain</button><button class="b" data-act="reverse">Reverse order</button><button class="b danger" data-act="clear-mission">Clear mission</button></div>' : ''}
     </div>`;
     html += renderSurveyCard();
 
@@ -1174,6 +1332,7 @@
         if (ui.surveyOpen) requestAnimationFrame(() => requestAnimationFrame(() => { const c = $('#survey-card'); if (c) c.scrollIntoView({ block: 'nearest' }); }));
         break;
       case 'survey-gen': generateSurvey(); break;
+      case 'terrain-check': terrainCheck(); break;
       case 'survey-remove': mutate(() => { state.mission = state.mission.filter((it) => !it.survey); ui.sel = null; }); break;
       case 'survey-clear-area': mutate(() => { state.survey.area = []; }); break;
       case 'survey-best-angle': mutate(() => { state.survey.angle = SV.longestEdgeAngle(state.survey.area); }); break;

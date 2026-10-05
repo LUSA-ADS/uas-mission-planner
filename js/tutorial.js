@@ -79,6 +79,12 @@
       check: () => P.state.survey && P.state.survey.area.length >= 3,
     },
     {
+      title: 'Check the terrain',
+      target: '[data-act="terrain-check"]',
+      mode: 'mission',
+      text: 'Click <b>Check terrain</b> to compare your waypoint heights with the ground below. It shows a profile chart, the clearance at every waypoint, and marks any stretch that is too close to the terrain or above the height limit.',
+    },
+    {
       title: 'Read the checks',
       target: () => { const c = $('#sidebar .checks'); return c && c.closest('.card'); },
       mode: 'mission',
