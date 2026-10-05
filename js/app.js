@@ -452,8 +452,9 @@
     else if (item.cmd !== 16 && item.cmd !== 82) cls += ' special';
     if (selected) cls += ' sel';
     if (!active) cls += ' dim';
-    if (item.survey && !selected) { // keep dense survey grids readable: small dot, number on selection
-      return L.divIcon({ className: '', html: `<div class="${cls} dot" style="width:12px;height:12px"></div>`, iconSize: [12, 12], iconAnchor: [6, 6] });
+    if (item.survey) { // dense survey grids: slightly smaller marker, number always shown
+      const px = n > 99 ? 24 : 20;
+      return L.divIcon({ className: '', html: `<div class="${cls} small" style="width:${px}px;height:${px}px">${n}</div>`, iconSize: [px, px], iconAnchor: [px / 2, px / 2] });
     }
     return L.divIcon({ className: '', html: `<div class="${cls}" style="width:24px;height:24px">${n}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] });
   }
