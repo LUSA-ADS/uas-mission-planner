@@ -13,6 +13,10 @@ A browser-based planner for UAS operator training. Students plan a **mission**, 
 - **Save project:** a `.project.json` file students can reopen later. The current plan is also kept automatically in the browser.
 - Undo with Ctrl+Z. Esc cancels a tool, Enter finishes a polygon, Delete removes the selected item.
 
+## Preflight checklist
+
+`checklist.html` is a separate page with a preflight checklist for RC fixed-wing aircraft. It is built for VR browsers: large tap targets, high contrast, no hover or small controls, no external downloads. Progress is saved on the device, a progress bar shows what is left, "Next unchecked" jumps to the next open item, and "Reset all" needs two taps. The checklist is a general guide, so adapt it to your aircraft.
+
 ## Exported files
 
 All three are in the plain-text `QGC WPL 110` format that Mission Planner uses on its Plan screen:

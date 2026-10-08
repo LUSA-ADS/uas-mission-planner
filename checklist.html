@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>RC Fixed-Wing Preflight Checklist</title>
+  <meta name="description" content="Preflight checklist for RC fixed-wing aircraft, built for use in a VR browser.">
+  <style>
+    :root {
+      --bg: #0b1220; --panel: #141d2e; --panel-2: #1a2640; --ink: #f4f7fb; --muted: #aebbd0;
+      --line: #2e3d5a; --accent: #4aa3ff; --ok: #34d17a; --ok-bg: #12301f;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { font-size: 26px; }
+    body {
+      margin: 0; background: var(--bg); color: var(--ink); line-height: 1.35;
+      -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 0 20px 80px; }
+
+    /* sticky status bar: stays visible while scrolling */
+    .bar {
+      position: sticky; top: 0; z-index: 10; background: var(--bg);
+      padding: 14px 0 12px; border-bottom: 3px solid var(--line);
+    }
+    .bar-top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    h1 { margin: 0; font-size: 1.35rem; flex: 1; min-width: 12rem; }
+    .back { color: var(--accent); font-size: .85rem; text-decoration: none; padding: 10px 4px; }
+    .progress { height: 22px; background: var(--panel-2); border-radius: 11px; overflow: hidden; margin: 12px 0 8px; border: 2px solid var(--line); }
+    .progress > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s; }
+    .status { font-size: 1.05rem; font-weight: 700; }
+    .bar.done { border-bottom-color: var(--ok); }
+    .bar.done .progress > i { background: var(--ok); }
+    .bar.done .status { color: var(--ok); }
+    .bar-btns { display: flex; gap: 14px; margin-top: 10px; }
+
+    button {
+      font: inherit; font-size: .9rem; font-weight: 700; color: var(--ink); background: var(--panel-2);
+      border: 3px solid var(--line); border-radius: 16px; min-height: 64px; padding: 10px 26px; cursor: pointer;
+    }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #04121f; }
+    button:active { filter: brightness(.85); }
+    button.armed { background: #7a1f1f; border-color: #ff6b6b; }
+
+    section { margin-top: 34px; }
+    h2 { display: flex; align-items: center; gap: 14px; margin: 0 0 6px; font-size: 1.15rem; }
+    h2 .count { margin-left: auto; font-size: .8rem; color: var(--muted); font-weight: 600; }
+    h2 .count.full { color: var(--ok); }
+    .note { margin: 0 0 6px; color: var(--muted); font-size: .75rem; }
+
+    label.item {
+      display: flex; align-items: center; gap: 24px; min-height: 96px; margin: 14px 0; padding: 18px 24px;
+      background: var(--panel); border: 3px solid var(--line); border-radius: 20px; cursor: pointer; user-select: none;
+    }
+    label.item:active { background: var(--panel-2); }
+    label.item input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .box {
+      flex: none; width: 60px; height: 60px; border: 5px solid var(--muted); border-radius: 14px;
+      display: flex; align-items: center; justify-content: center; font-size: 42px; font-weight: 900; color: transparent;
+    }
+    .txt { flex: 1; }
+    .txt b { display: block; font-size: 1rem; }
+    .txt small { display: block; margin-top: 4px; font-size: .72rem; color: var(--muted); }
+    label.item input:checked ~ .box { background: var(--ok); border-color: var(--ok); color: #05210f; }
+    label.item:has(input:checked) { border-color: var(--ok); background: var(--ok-bg); }
+    label.item:has(input:checked) .txt b { color: #bff0d3; }
+    label.item input:focus-visible ~ .box { outline: 5px solid var(--accent); outline-offset: 4px; }
+
+    footer { margin-top: 40px; color: var(--muted); font-size: .72rem; }
+    @media (max-width: 520px) { html { font-size: 22px; } }
+    @media (prefers-reduced-motion: reduce) { .progress > i { transition: none; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="bar" id="bar">
+      <div class="bar-top">
+        <h1>RC Fixed-Wing Preflight</h1>
+        <a class="back" href="index.html">← Flight planner</a>
+      </div>
+      <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="prog"><i id="prog-fill"></i></div>
+      <div class="status" id="status" role="status" aria-live="polite">0 of 0 done</div>
+      <div class="bar-btns">
+        <button class="primary" id="btn-next" type="button">Next unchecked ▾</button>
+        <button id="btn-reset" type="button">Reset all</button>
+      </div>
+    </header>
+
+    <main id="lists"><noscript>This checklist needs JavaScript.</noscript></main>
+
+    <footer>Progress is saved on this device. A general guide only: follow your aircraft manual and local rules.</footer>
+  </div>
+
+  <script>
+  (function () {
+    'use strict';
+    var KEY = 'uas-flight-planning/checklist/v1';
+
+    var SECTIONS = [
+      { title: '1. Site and weather', items: [
+        ['wx', 'Weather and wind within limits', 'Wind, gusts, visibility and rain checked against the aircraft limits.'],
+        ['air', 'Airspace and permissions OK', 'Restrictions checked. Permission obtained where needed.'],
+        ['area', 'Launch, landing and flight area clear', 'No people, vehicles, animals or obstacles. Spectators stay behind the line.'],
+      ] },
+      { title: '2. Airframe', items: [
+        ['frame', 'Wings, tail and fuselage secure', 'No cracks or damage. Wing bolts or joiner locked. Hatch and canopy latched.'],
+        ['surf', 'Control surfaces free, linkages tight', 'Hinges, horns, clevises and servo arms secure. Nothing binds.'],
+        ['prop', 'Propeller and motor secure', 'Prop undamaged and tight, spinner on, motor mount solid. Centre of gravity checked.'],
+      ] },
+      { title: '3. Power', items: [
+        ['bat', 'Flight battery charged and strapped down', 'Voltage checked. No swelling or damage. Do not connect it yet.'],
+        ['wire', 'Wiring and connectors secure', 'Plugs fully seated, no loose or chafed wires, ESC and receiver tidy.'],
+      ] },
+      { title: '4. Radio', items: [
+        ['tx', 'Transmitter charged, correct model selected', 'Right model memory loaded. Throttle stick at minimum.'],
+        ['dir', 'Control directions correct', 'Aileron, elevator, rudder and throttle move the right way, with full travel.'],
+        ['range', 'Range check passed', 'Done as described in your radio manual.'],
+        ['fs', 'Failsafe tested', 'Transmitter off: throttle drops or return-to-launch starts as set. Propeller removed or aircraft restrained.'],
+      ] },
+      { title: '5. Autopilot (if fitted)', items: [
+        ['gps', 'GPS fix and home position set', 'Satellite count and HDOP good. Arming checks pass.'],
+        ['mission', 'Mission, fence and rally points loaded', 'Matches the plan from the flight planner. RTL altitude and fence action set.'],
+        ['sens', 'Compass, airspeed and attitude look right', 'Airspeed reads zero at rest. Tilt the aircraft and check the horizon moves the right way.'],
+      ] },
+      { title: '6. Before launch', items: [
+        ['clear', 'Propeller area and launch path clear', 'Everyone behind the aircraft. Hold it or restrain it before you connect power.'],
+        ['into', 'Launch direction into the wind', 'Observer ready. Abort plan agreed.'],
+        ['arm', 'Flight mode and throttle checked, then arm', 'Correct mode selected, throttle at minimum. Call "Arming" before you arm.'],
+      ] },
+    ];
+
+    var state = {};
+    try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { state = {}; }
+    function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* storage blocked */ } }
+
+    var lists = document.getElementById('lists');
+    var total = 0;
+    SECTIONS.forEach(function (sec, si) {
+      var s = document.createElement('section');
+      s.dataset.sec = si;
+      var h = document.createElement('h2');
+      h.innerHTML = '<span></span><span class="count"></span>';
+      h.firstChild.textContent = sec.title;
+      s.appendChild(h);
+      sec.items.forEach(function (it) {
+        total++;
+        var l = document.createElement('label');
+        l.className = 'item';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.dataset.id = it[0]; cb.checked = !!state[it[0]];
+        var box = document.createElement('span'); box.className = 'box'; box.setAttribute('aria-hidden', 'true'); box.textContent = '✓';
+        var t = document.createElement('span'); t.className = 'txt';
+        var b = document.createElement('b'); b.textContent = it[1];
+        var sm = document.createElement('small'); sm.textContent = it[2];
+        t.appendChild(b); t.appendChild(sm);
+        l.appendChild(cb); l.appendChild(box); l.appendChild(t);
+        s.appendChild(l);
+      });
+      lists.appendChild(s);
+    });
+
+    var bar = document.getElementById('bar'), fill = document.getElementById('prog-fill'),
+        prog = document.getElementById('prog'), status = document.getElementById('status');
+
+    function update() {
+      var boxes = lists.querySelectorAll('input[type=checkbox]');
+      var done = 0;
+      boxes.forEach(function (c) { if (c.checked) done++; });
+      var pct = total ? Math.round(done / total * 100) : 0;
+      fill.style.width = pct + '%';
+      prog.setAttribute('aria-valuenow', pct);
+      var all = done === total && total > 0;
+      bar.classList.toggle('done', all);
+      status.textContent = all ? '✓ All clear. Ready for flight.' : done + ' of ' + total + ' done';
+      lists.querySelectorAll('section').forEach(function (s) {
+        var cs = s.querySelectorAll('input[type=checkbox]'), n = 0;
+        cs.forEach(function (c) { if (c.checked) n++; });
+        var cnt = s.querySelector('.count');
+        cnt.textContent = n + ' / ' + cs.length;
+        cnt.classList.toggle('full', n === cs.length);
+      });
+    }
+
+    lists.addEventListener('change', function (e) {
+      var id = e.target.dataset && e.target.dataset.id;
+      if (!id) return;
+      if (e.target.checked) state[id] = true; else delete state[id];
+      save(); update();
+    });
+
+    document.getElementById('btn-next').addEventListener('click', function () {
+      var c = lists.querySelector('input[type=checkbox]:not(:checked)');
+      if (!c) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+      var row = c.closest('label');
+      var offset = bar.offsetHeight + 16;
+      window.scrollTo({ top: row.getBoundingClientRect().top + window.pageYOffset - offset, behavior: 'smooth' });
+    });
+
+    // Reset needs two taps: VR browsers handle confirm() dialogs badly.
+    var rb = document.getElementById('btn-reset'), armTimer;
+    function disarm() { rb.classList.remove('armed'); rb.textContent = 'Reset all'; clearTimeout(armTimer); }
+    rb.addEventListener('click', function () {
+      if (!rb.classList.contains('armed')) {
+        rb.classList.add('armed'); rb.textContent = 'Tap again to reset';
+        armTimer = setTimeout(disarm, 4000);
+        return;
+      }
+      state = {}; save();
+      lists.querySelectorAll('input[type=checkbox]').forEach(function (c) { c.checked = false; });
+      disarm(); update();
+      window.scrollTo({ top: 0 });
+    });
+
+    update();
+  })();
+  </script>
+</body>
+</html>

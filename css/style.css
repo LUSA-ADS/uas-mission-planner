@@ -271,3 +271,5 @@ path.tp-bad { fill: none; }
 .tp-table td { padding: 4px 8px; border-top: 1px solid var(--line); }
 .tp-table tr.low td, .tp-table tr.under td { background: var(--err-bg); color: var(--err); }
 .tp-table tr.high td { background: var(--warn-bg); color: var(--warn); }
+
+.actions a.btn { text-decoration: none; display: inline-flex; align-items: center; }
