@@ -1511,14 +1511,14 @@
         key: 'fence', label: 'Geofence', count: state.fence.polygons.length + state.fence.circles.length, unit: 'zones',
         filename: base + '_fence.waypoints',
         text: state.fence.polygons.length || state.fence.circles.length || state.fence.returnPoint
-          ? F.fenceToQGC({ returnPoint: state.fence.returnPoint, polygons: state.fence.polygons.filter((p) => p.points.length >= 3), circles: state.fence.circles })
+          ? F.fenceToQGC({ returnPoint: state.fence.returnPoint, polygons: state.fence.polygons.filter((p) => p.points.length >= 3), circles: state.fence.circles }, state.home)
           : '',
         checks: fenceChecks(),
       },
       {
         key: 'rally', label: 'Rally points', count: state.rally.length, unit: 'points',
         filename: base + '_rally.waypoints',
-        text: state.rally.length ? F.rallyToQGC(state.rally) : '',
+        text: state.rally.length ? F.rallyToQGC(state.rally, state.home) : '',
         checks: rallyChecks(),
       },
     ];

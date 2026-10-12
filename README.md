@@ -24,8 +24,10 @@ All three are in the plain-text `QGC WPL 110` format that Mission Planner uses o
 | File | Content |
 |---|---|
 | `<plan>_mission.waypoints` | Line 0 = home, then mission items (altitude frame per item, default *relative to home*) |
-| `<plan>_fence.waypoints` | `MAV_CMD_NAV_FENCE_*` items: 5000 return point, 5001/5002 polygon vertices, 5003/5004 circles |
-| `<plan>_rally.waypoints` | `MAV_CMD_NAV_RALLY_POINT` (5100) items, altitude relative to home |
+| `<plan>_fence.waypoints` | Line 0 = placeholder home line, then `MAV_CMD_NAV_FENCE_*` items: 5000 return point, 5001/5002 polygon vertices, 5003/5004 circles |
+| `<plan>_rally.waypoints` | Line 0 = placeholder home line, then `MAV_CMD_NAV_RALLY_POINT` (5100) items, altitude relative to home |
+
+Mission Planner discards line 0 when it loads a Fence or Rally file, so the placeholder line keeps your first real point from being lost.
 
 The fence format is the polygon/circle fence used by ArduPilot 4.0 and later. Fence altitude limits, the breach action and enabling the fence are **parameters** (`FENCE_ENABLE`, `FENCE_TYPE`, `FENCE_ALT_MAX`, `FENCE_ACTION` …). They are set in Mission Planner, not in the file.
 

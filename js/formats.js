@@ -10,9 +10,13 @@
  * (fields separated by TAB)
  *
  *  - Mission : line 0 is the home position, then mission items 1..N.
- *  - Geofence: MAV_CMD_NAV_FENCE_* items (5000 return point, 5001/5002 polygon
- *              vertices with p1 = vertex count, 5003/5004 circles with p1 = radius).
- *  - Rally   : MAV_CMD_NAV_RALLY_POINT (5100) items.
+ *  - Geofence: line 0 is a dummy home line, then MAV_CMD_NAV_FENCE_* items (5000 return
+ *              point, 5001/5002 polygon vertices with p1 = vertex count, 5003/5004
+ *              circles with p1 = radius).
+ *  - Rally   : line 0 is a dummy home line, then MAV_CMD_NAV_RALLY_POINT (5100) items.
+ *
+ * Mission Planner drops line 0 when it loads a Fence or Rally file (it expects the home
+ * line it writes itself), so without the dummy line the first real item is lost.
  *
  * This file has no DOM dependencies so it can be unit-tested in Node.
  */
@@ -132,6 +136,12 @@
 
   const EOL = '\r\n';
 
+  /** Line 0 of every file. Real home for missions, a placeholder for fence and rally files. */
+  function homeLine(home) {
+    const h = home || { lat: 0, lon: 0, alt: 0 };
+    return qgcLine(0, 1, FRAME.ABSOLUTE, 16, [0, 0, 0, 0], h.lat, h.lon, h.alt || 0);
+  }
+
   /**
    * Mission -> QGC WPL 110.
    * @param {{home: {lat,lon,alt}|null, items: Array}} plan
@@ -144,7 +154,7 @@
       home = first ? { lat: first.lat, lon: first.lon, alt: 0 } : { lat: 0, lon: 0, alt: 0 };
     }
     const out = ['QGC WPL 110'];
-    out.push(qgcLine(0, 1, FRAME.ABSOLUTE, 16, [0, 0, 0, 0], home.lat, home.lon, home.alt || 0));
+    out.push(homeLine(home));
     items.forEach((it, i) => {
       const info = cmdInfo(it.cmd);
       const hasPos = info.loc === true || (info.loc === 'opt' && itemHasPosition(it));
@@ -161,10 +171,11 @@
   /**
    * Geofence -> QGC WPL 110 (ArduPilot 4.0+ polygon / circle fences).
    * @param {{returnPoint, polygons:[{type,points}], circles:[{type,lat,lon,radius}]}} fence
+   * @param {{lat,lon,alt}|null} home only used for the placeholder line 0
    */
-  function fenceToQGC(fence) {
-    const out = ['QGC WPL 110'];
-    let idx = 0;
+  function fenceToQGC(fence, home) {
+    const out = ['QGC WPL 110', homeLine(home)];
+    let idx = 1;
     if (fence.returnPoint) {
       out.push(qgcLine(idx++, 0, FRAME.ABSOLUTE, FENCE_CMD.RETURN, [0, 0, 0, 0],
         fence.returnPoint.lat, fence.returnPoint.lon, 0));
@@ -184,10 +195,10 @@
   }
 
   /** Rally points -> QGC WPL 110 (MAV_CMD_NAV_RALLY_POINT). */
-  function rallyToQGC(points) {
-    const out = ['QGC WPL 110'];
+  function rallyToQGC(points, home) {
+    const out = ['QGC WPL 110', homeLine(home)];
     points.forEach((r, i) => {
-      out.push(qgcLine(i, 0, FRAME.RELATIVE, RALLY_CMD, [0, 0, 0, 0], r.lat, r.lon, r.alt));
+      out.push(qgcLine(i + 1, 0, FRAME.RELATIVE, RALLY_CMD, [0, 0, 0, 0], r.lat, r.lon, r.alt));
     });
     return out.join(EOL) + EOL;
   }
@@ -215,8 +226,14 @@
    * Returns { kind: 'mission', home, items } | { kind: 'fence', fence } | { kind: 'rally', points }
    */
   function parseQGC(text) {
-    const rows = parseRows(text);
-    const isFence = rows.length && rows.every((r) => r.cmd >= 5000 && r.cmd <= 5004);
+    let rows = parseRows(text);
+    const isFenceCmd = (r) => r.cmd >= 5000 && r.cmd <= 5004;
+    // fence and rally files from Mission Planner start with a placeholder home line
+    if (rows.length > 1 && rows[0].index === 0 && rows[0].cmd === 16) {
+      const rest = rows.slice(1);
+      if (rest.every(isFenceCmd) || rest.every((r) => r.cmd === RALLY_CMD)) rows = rest;
+    }
+    const isFence = rows.length && rows.every(isFenceCmd);
     const isRally = rows.length && rows.every((r) => r.cmd === RALLY_CMD);
 
     if (isFence) {
