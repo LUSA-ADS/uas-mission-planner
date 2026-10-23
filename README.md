@@ -15,7 +15,7 @@ A browser-based planner for UAS operator training. Students plan a **mission**, 
 
 ## Preflight checklist
 
-`checklist.html` is a separate page with a preflight checklist for RC fixed-wing aircraft. It is built for VR browsers: large tap targets, high contrast, no hover or small controls, no external downloads. Progress is saved on the device, a progress bar shows what is left, "Next unchecked" jumps to the next open item, and "Reset all" needs two taps. The checklist is a general guide, so adapt it to your aircraft.
+`checklist.html` (currently not linked from the planner; open it by its address) is a separate page with a preflight checklist for RC fixed-wing aircraft. It is built for VR browsers: large tap targets, high contrast, no hover or small controls, no external downloads. Progress is saved on the device, a progress bar shows what is left, "Next unchecked" jumps to the next open item, and "Reset all" needs two taps. The checklist is a general guide, so adapt it to your aircraft.
 
 ## Exported files
 

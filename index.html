@@ -2,10 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://cdnjs.cloudflare.com https://server.arcgisonline.com https://*.tile.openstreetmap.org https://*.tile.opentopomap.org https://*.basemaps.cartocdn.com https://*.tile-cyclosm.openstreetmap.fr https://elevation-tiles-prod.s3.amazonaws.com; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>UAS Flight Planning</title>
   <meta name="description" content="Web-based mission, geofence and rally point planner for UAS operator training. Exports Mission Planner compatible files.">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"
+        integrity="sha512-h9FcoyWjHcOcmEVkxOfTLnmZFWIH0iZhZT1H2TbOq55xssQGEJHEaIm+PgoUaZbRvQTNTluNOEfb1ZRy6D3BOw==" crossorigin="anonymous" referrerpolicy="no-referrer">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -21,7 +23,9 @@
       <button role="tab" data-mode="rally" class="mode">Rally points</button>
     </nav>
     <div class="actions">
+      <!-- Checklist link disabled for now. Restore to re-enable:
       <a class="btn" href="checklist.html" title="Preflight checklist for RC fixed-wing aircraft (VR friendly)">Checklist</a>
+      -->
       <button id="btn-tutorial" title="Step-by-step guide to the planner">Tutorial</button>
       <button id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
       <label class="btn" title="Load .waypoints, QGroundControl .plan or a saved project">
@@ -69,7 +73,8 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"
+          integrity="sha512-puJW3E/qXDqYp9IfhAI54BJEaWIfloJ7JWs7OeD5i6ruC9JZL1gERT1wjtwXFlh7CjE7ZJ+/vcRZRkIYIb6p4g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="js/formats.js"></script>
   <script src="js/survey.js"></script>
   <script src="js/terrain.js"></script>
